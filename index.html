@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>CITYBEAT — Live Events</title>
+
+<!-- ── PWA META ── -->
+<meta name="theme-color" content="#0e0e0f">
+<meta name="description" content="Concerts, festivals, and public events in NYC, Austin, and the SF Bay Area.">
+<meta name="application-name" content="CITYBEAT">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CITYBEAT">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<!-- iOS splash screens (key sizes) -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="CITYBEAT — Live Events">
+<meta property="og:description" content="Concerts, festivals, and public events in NYC, Austin & SF Bay Area.">
+<meta property="og:image" content="/icons/icon-512.png">
+
+<!-- Manifest -->
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<style>
+:root{
+  --bg:#0e0e0f;--surface:#161618;--surface2:#1e1e21;--surface3:#252529;
+  --border:#2a2a2e;--border2:#333338;
+  --text:#e8e6e0;--muted:#7a7870;--muted2:#4e4e4b;
+  --accent:#f0a500;
+  --nyc:#4a9eff;--austin:#5ecb6e;--bay:#c97ff5;
+  --pill-bg:#1c1c1f;
+  --overlay:rgba(0,0,0,0.82);
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'DM Sans',sans-serif;font-weight:300;
+  display:flex;flex-direction:column;
+  /* Safe area for notched phones */
+  padding-top:var(--safe-top);
+  padding-bottom:var(--safe-bottom);
+}
+
+/* ── HEADER ── */
+header{
+  display:flex;align-items:center;gap:10px;
+  padding:0 14px;height:50px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;z-index:100;
+}
+.logo{font-family:'Bebas Neue',cursive;font-size:22px;letter-spacing:3px;color:var(--accent);white-space:nowrap;cursor:pointer;user-select:none;}
+.logo sub{font-size:10px;letter-spacing:2px;color:var(--muted);vertical-align:baseline;font-family:'DM Mono',monospace;}
+
+.city-tabs{display:flex;gap:2px;background:var(--pill-bg);border-radius:6px;padding:3px;border:1px solid var(--border);}
+.city-tab{padding:3px 10px;border-radius:4px;font-size:10px;font-weight:500;letter-spacing:.4px;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .15s;font-family:'DM Mono',monospace;white-space:nowrap;}
+.city-tab:hover{color:var(--text);}
+.city-tab.active[data-city="all"]{background:var(--accent);color:#111;}
+.city-tab.active[data-city="nyc"]{background:var(--nyc);color:#fff;}
+.city-tab.active[data-city="austin"]{background:var(--austin);color:#111;}
+.city-tab.active[data-city="bay"]{background:var(--bay);color:#111;}
+
+.date-nav{display:flex;align-items:center;gap:4px;}
+.date-nav button{background:var(--pill-bg);border:1px solid var(--border);color:var(--muted);width:26px;height:26px;border-radius:4px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.date-nav button:hover{border-color:var(--accent);color:var(--accent);}
+.date-nav input[type="date"]{background:var(--pill-bg);border:1px solid var(--border);color:var(--text);padding:3px 8px;border-radius:4px;font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;outline:none;height:26px;}
+.date-nav input[type="date"]:focus{border-color:var(--accent);}
+
+.header-right{display:flex;align-items:center;gap:6px;margin-left:auto;}
+.view-toggle{display:flex;gap:2px;background:var(--pill-bg);border-radius:6px;padding:3px;border:1px solid var(--border);}
+.view-btn{padding:3px 10px;border-radius:4px;font-size:10px;letter-spacing:.3px;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .15s;font-family:'DM Mono',monospace;}
+.view-btn.active{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.nav-tabs{display:flex;gap:2px;background:var(--pill-bg);border-radius:6px;padding:3px;border:1px solid var(--border);}
+.nav-tab{padding:3px 11px;border-radius:4px;font-size:10px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .15s;font-family:'DM Mono',monospace;display:flex;align-items:center;gap:4px;letter-spacing:.3px;}
+.nav-tab.active{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.fav-count{background:var(--accent);color:#111;border-radius:10px;padding:1px 5px;font-size:9px;font-weight:700;line-height:14px;}
+
+.user-btn{display:flex;align-items:center;gap:6px;background:var(--pill-bg);border:1px solid var(--border);border-radius:6px;padding:3px 10px;cursor:pointer;transition:all .15s;color:var(--text);font-size:11px;font-family:'DM Sans',sans-serif;height:26px;white-space:nowrap;}
+.user-btn:hover{border-color:var(--accent);}
+.user-avatar{width:17px;height:17px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#111;flex-shrink:0;}
+
+/* ── INSTALL BANNER ── */
+.install-banner{
+  display:none;align-items:center;gap:10px;
+  padding:9px 14px;background:linear-gradient(90deg,#1a1500,#1c1c1f);
+  border-bottom:1px solid #3a2e00;flex-shrink:0;
+}
+.install-banner.visible{display:flex;}
+.install-banner-text{font-size:12px;color:var(--text);flex:1;line-height:1.4;}
+.install-banner-text strong{color:var(--accent);}
+.install-now-btn{background:var(--accent);color:#111;border:none;border-radius:5px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer;white-space:nowrap;font-family:'DM Sans',sans-serif;transition:opacity .15s;}
+.install-now-btn:hover{opacity:.85;}
+.install-dismiss{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:2px 4px;line-height:1;}
+
+/* ── OFFLINE PILL ── */
+.offline-pill{
+  display:none;align-items:center;gap:6px;
+  padding:5px 14px;background:#1a0a0a;border-bottom:1px solid #3a1010;
+  font-size:11px;color:#e06060;flex-shrink:0;
+}
+.offline-pill.visible{display:flex;}
+.offline-dot{width:6px;height:6px;border-radius:50%;background:#e06060;animation:pulse 1.5s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+/* ── LAYOUT ── */
+.app-body{display:flex;flex:1;overflow:hidden;}
+.sidebar{width:390px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;}
+.sidebar-header{padding:9px 14px 7px;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:10px;flex-shrink:0;}
+.sidebar-date-label{font-family:'Bebas Neue',cursive;font-size:15px;letter-spacing:2px;color:var(--text);}
+.sidebar-count{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);}
+
+.cat-filter{display:flex;gap:4px;padding:6px 14px;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.cat-filter::-webkit-scrollbar{display:none;}
+.cat-pill{padding:2px 9px;border-radius:20px;font-size:10px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);white-space:nowrap;transition:all .15s;font-family:'DM Sans',sans-serif;-webkit-tap-highlight-color:transparent;}
+.cat-pill:hover{color:var(--text);border-color:var(--muted);}
+.cat-pill.active{background:var(--accent);color:#111;border-color:var(--accent);}
+
+.event-list{flex:1;overflow-y:auto;padding:3px 0;scrollbar-width:thin;scrollbar-color:var(--border) transparent;-webkit-overflow-scrolling:touch;}
+.event-list::-webkit-scrollbar{width:3px;}
+.event-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* ── EVENT CARD ── */
+.event-card{padding:8px 14px;border-bottom:1px solid #191919;cursor:pointer;transition:background .1s;display:flex;gap:10px;align-items:flex-start;position:relative;-webkit-tap-highlight-color:transparent;}
+.event-card:hover{background:var(--surface2);}
+.event-card.selected{background:var(--surface2);border-left:2px solid var(--accent);padding-left:12px;}
+/* Touch-friendly tap state */
+.event-card:active{background:var(--surface3);}
+.event-time-col{width:44px;flex-shrink:0;text-align:right;padding-top:1px;}
+.event-time{font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);line-height:1.4;}
+.event-price{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted2);margin-top:2px;}
+.event-main{flex:1;min-width:0;}
+.event-name{font-size:13px;font-weight:500;line-height:1.3;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:24px;color:var(--text);}
+.event-venue{font-size:11px;color:var(--muted);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.event-tags{display:flex;gap:3px;align-items:center;flex-wrap:wrap;}
+.tag{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:500;letter-spacing:.2px;line-height:14px;}
+.tag-genre{background:#1c1c24;color:#8888b8;border:1px solid #28283a;}
+.tag-city-nyc{background:#0c1c30;color:var(--nyc);border:1px solid #183050;}
+.tag-city-austin{background:#0b1e10;color:var(--austin);border:1px solid #183020;}
+.tag-city-bay{background:#1a0e26;color:var(--bay);border:1px solid #2e1846;}
+.tag-hot{background:#261208;color:#e06030;border:1px solid #38200e;}
+.tag-free{background:#0e1e14;color:#5ecb8e;border:1px solid #1a3424;}
+
+.fav-btn{position:absolute;top:8px;right:10px;background:none;border:none;cursor:pointer;font-size:14px;line-height:1;opacity:.25;transition:all .18s;padding:4px;color:var(--text);-webkit-tap-highlight-color:transparent;min-width:28px;min-height:28px;display:flex;align-items:center;justify-content:center;}
+.fav-btn:hover{opacity:.65;}
+.fav-btn:active{transform:scale(1.3);}
+.fav-btn.faved{opacity:1;color:var(--accent);text-shadow:0 0 6px #f0a50055;}
+
+.section-day{padding:6px 14px 3px;font-family:'DM Mono',monospace;font-size:9px;color:var(--muted2);letter-spacing:1px;border-bottom:1px solid #161616;background:var(--bg);}
+
+/* ── MAP ── */
+.map-pane{flex:1;position:relative;display:flex;flex-direction:column;}
+#map{flex:1;background:#111;}
+.app-body.list-full .sidebar{width:100%;border-right:none;}
+.app-body.list-full .map-pane{display:none;}
+.app-body.map-full .sidebar{display:none;}
+
+/* ── DETAIL PANEL ── */
+.detail-panel{position:absolute;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:12px 16px 16px;transform:translateY(100%);transition:transform .22s ease;z-index:500;}
+.detail-panel.open{transform:translateY(0);}
+.detail-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.detail-title{font-size:14px;font-weight:500;flex:1;line-height:1.3;}
+.detail-actions{display:flex;gap:5px;align-items:center;flex-shrink:0;}
+.detail-fav-btn{background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;padding:4px 11px;transition:all .18s;font-size:10px;font-family:'DM Mono',monospace;letter-spacing:.3px;min-height:30px;}
+.detail-fav-btn.faved{border-color:var(--accent);color:var(--accent);}
+.detail-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:4px;min-width:30px;min-height:30px;display:flex;align-items:center;justify-content:center;}
+.detail-meta{display:flex;gap:12px;margin-top:7px;flex-wrap:wrap;}
+.dmi{font-size:11px;color:var(--muted);display:flex;gap:3px;align-items:center;}
+.dmi span{color:var(--text);}
+.detail-desc{font-size:12px;color:var(--muted);margin-top:7px;line-height:1.65;font-style:italic;}
+
+/* ── EMPTY STATE ── */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:8px;color:var(--muted);font-size:12px;padding:40px 20px;text-align:center;}
+.empty-state .icon{font-size:26px;opacity:.25;}
+
+/* ── MODALS ── */
+.modal-backdrop{position:fixed;inset:0;background:var(--overlay);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;backdrop-filter:blur(6px);padding:16px;}
+.modal-backdrop.open{opacity:1;pointer-events:all;}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:380px;padding:26px;position:relative;transform:translateY(10px);transition:transform .22s;}
+.modal-backdrop.open .modal{transform:translateY(0);}
+.modal-close{position:absolute;top:13px;right:14px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:17px;line-height:1;min-width:30px;min-height:30px;display:flex;align-items:center;justify-content:center;}
+.auth-logo{font-family:'Bebas Neue',cursive;font-size:26px;letter-spacing:3px;color:var(--accent);text-align:center;margin-bottom:3px;}
+.auth-sub{text-align:center;font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.55;}
+.sso-btn{width:100%;padding:11px 16px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all .15s;font-family:'DM Sans',sans-serif;margin-bottom:8px;min-height:44px;-webkit-tap-highlight-color:transparent;}
+.sso-btn:hover{border-color:rgba(255,255,255,.22);background:var(--surface3);}
+.sso-btn svg{width:17px;height:17px;flex-shrink:0;}
+.sso-label{flex:1;text-align:center;}
+.auth-div{text-align:center;font-size:10px;color:var(--muted2);margin:10px 0;display:flex;align-items:center;gap:8px;}
+.auth-div::before,.auth-div::after{content:'';flex:1;height:1px;background:var(--border);}
+.form-input{width:100%;padding:10px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s;margin-bottom:8px;min-height:44px;}
+.form-input:focus{border-color:var(--accent);}
+.auth-note{text-align:center;font-size:10px;color:var(--muted2);line-height:1.6;margin-top:14px;}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:calc(18px + var(--safe-bottom));left:50%;transform:translateX(-50%) translateY(8px);background:var(--surface3);border:1px solid var(--border2);color:var(--text);padding:8px 16px;border-radius:20px;font-size:11px;z-index:9999;opacity:0;transition:all .22s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ── iOS INSTALL GUIDE (shown when install prompt unavailable) ── */
+.ios-install-hint{
+  position:fixed;bottom:calc(20px + var(--safe-bottom));left:50%;
+  transform:translateX(-50%) translateY(10px);
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:10px;padding:12px 16px;font-size:12px;color:var(--text);
+  z-index:9000;opacity:0;pointer-events:none;transition:all .3s;
+  width:calc(100% - 32px);max-width:320px;line-height:1.6;
+  box-shadow:0 8px 32px rgba(0,0,0,.6);
+}
+.ios-install-hint.visible{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:all;}
+.ios-hint-close{float:right;background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;margin-left:8px;}
+
+/* Leaflet */
+.leaflet-popup-content-wrapper{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.6);font-family:'DM Sans',sans-serif;}
+.leaflet-popup-tip{background:var(--surface);}
+.popup-name{font-size:12px;font-weight:500;margin-bottom:2px;}
+.popup-venue{font-size:10px;color:var(--muted);}
+.popup-time{font-size:10px;color:var(--accent);font-family:'DM Mono',monospace;margin-top:3px;}
+.leaflet-control-attribution{background:rgba(10,10,11,.85)!important;color:var(--muted2)!important;font-size:9px!important;}
+.leaflet-control-attribution a{color:var(--muted2)!important;}
+
+/* ── RESPONSIVE: Mobile ── */
+@media (max-width: 680px) {
+  header{gap:7px;padding:0 10px;height:48px;overflow-x:auto;scrollbar-width:none;}
+  header::-webkit-scrollbar{display:none;}
+  .logo sub{display:none;}
+  /* Stack city tabs + date nav vertically on mobile via second row */
+  .city-tabs .city-tab{padding:3px 8px;font-size:9px;}
+  .sidebar{width:100%;}
+  .app-body{flex-direction:column;}
+  .app-body .map-pane{height:35vh;flex:none;}
+  .app-body .sidebar{flex:1;}
+  .app-body.map-full .map-pane{height:100%;flex:1;}
+  .app-body.map-full .sidebar{display:none;}
+  .app-body.list-full .map-pane{display:none;}
+  /* Hide view toggle text on small screens */
+  .view-btn{font-size:0;padding:3px 8px;}
+  .view-btn::after{font-size:12px;}
+  .view-btn[data-view="split"]::after{content:'⊟';}
+  .view-btn[data-view="list"]::after{content:'☰';}
+  .view-btn[data-view="map"]::after{content:'◻';}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CITYBEAT <sub>/ LIVE EVENTS</sub></div>
+
+  <div class="city-tabs">
+    <button class="city-tab active" data-city="all">ALL</button>
+    <button class="city-tab" data-city="nyc">NYC</button>
+    <button class="city-tab" data-city="austin">ATX</button>
+    <button class="city-tab" data-city="bay">BAY</button>
+  </div>
+
+  <div class="date-nav">
+    <button id="prevDay">‹</button>
+    <input type="date" id="datePicker"/>
+    <button id="nextDay">›</button>
+  </div>
+
+  <div class="header-right">
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-nav="browse">BROWSE</button>
+      <button class="nav-tab" data-nav="favorites">★ SAVED <span class="fav-count" id="favBadge" style="display:none">0</span></button>
+    </div>
+    <div class="view-toggle">
+      <button class="view-btn active" data-view="split">⊟ SPLIT</button>
+      <button class="view-btn" data-view="list">☰ LIST</button>
+      <button class="view-btn" data-view="map">◻ MAP</button>
+    </div>
+    <button class="user-btn" id="userBtn">
+      <div class="user-avatar" id="userAvatar">☺</div>
+      <span id="userLabel">Sign In</span>
+    </button>
+  </div>
+</header>
+
+<!-- Install banner (shown when browser offers install) -->
+<div class="install-banner" id="installBanner">
+  <div class="install-banner-text">
+    <strong>Add CITYBEAT to your home screen</strong> — browse events offline, instant launch.
+  </div>
+  <button class="install-now-btn" id="installNowBtn">Install</button>
+  <button class="install-dismiss" id="installDismiss" title="Dismiss">×</button>
+</div>
+
+<!-- Offline indicator -->
+<div class="offline-pill" id="offlinePill">
+  <div class="offline-dot"></div>
+  You're offline — showing cached events
+</div>
+
+<div class="app-body" id="appBody">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-date-label" id="sidebarDateLabel">TODAY</div>
+      <div class="sidebar-count" id="sidebarCount">— EVENTS</div>
+    </div>
+    <div class="cat-filter" id="catFilter">
+      <button class="cat-pill active" data-cat="all">ALL</button>
+      <button class="cat-pill" data-cat="Music">MUSIC</button>
+      <button class="cat-pill" data-cat="Festival">FESTIVAL</button>
+      <button class="cat-pill" data-cat="Comedy">COMEDY</button>
+      <button class="cat-pill" data-cat="Art">ART</button>
+      <button class="cat-pill" data-cat="Sports">SPORTS</button>
+      <button class="cat-pill" data-cat="Food">FOOD</button>
+      <button class="cat-pill" data-cat="Market">MARKET</button>
+      <button class="cat-pill" data-cat="Theater">THEATER</button>
+      <button class="cat-pill" data-cat="Community">COMMUNITY</button>
+      <button class="cat-pill" data-cat="Tech">TECH</button>
+    </div>
+    <div class="event-list" id="eventList"></div>
+  </div>
+
+  <div class="map-pane">
+    <div id="map"></div>
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-header">
+        <div class="detail-title" id="detailTitle"></div>
+        <div class="detail-actions">
+          <button class="detail-fav-btn" id="detailFavBtn">☆ SAVE</button>
+          <button class="detail-close" id="detailClose">×</button>
+        </div>
+      </div>
+      <div class="detail-meta" id="detailMeta"></div>
+      <div class="detail-desc" id="detailDesc"></div>
+    </div>
+  </div>
+</div>
+
+<!-- AUTH MODAL -->
+<div class="modal-backdrop" id="authModal">
+  <div class="modal">
+    <button class="modal-close" id="authClose">×</button>
+    <div class="auth-logo">CITYBEAT</div>
+    <div class="auth-sub">Sign in to save events and build<br>your personal events calendar.</div>
+
+    <button class="sso-btn" id="googleBtn">
+      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        <path d="M43.6 20.5H42V20H24v8h11.3C33.6 33 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.5 6.5 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.4-.4-3.5z" fill="#FFC107"/>
+        <path d="M6.3 14.7l6.6 4.8C14.6 16 19 12 24 12c3.1 0 5.8 1.1 8 2.9l5.7-5.7C34.5 6.5 29.5 4 24 4c-7.7 0-14.4 4.4-17.7 10.7z" fill="#FF3D00"/>
+        <path d="M24 44c5.3 0 10.1-2 13.7-5.2l-6.3-5.3C29.3 35.4 26.8 36 24 36c-5.3 0-9.7-3-11.4-7.5l-6.6 5.1C9.4 39.5 16.2 44 24 44z" fill="#4CAF50"/>
+        <path d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.2 5.7l6.3 5.3c-.4.4 6.6-4.8 6.6-15 0-1.2-.1-2.4-.4-3.5z" fill="#1976D2"/>
+      </svg>
+      <span class="sso-label">Continue with Google</span>
+    </button>
+
+    <button class="sso-btn" id="appleBtn">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/></svg>
+      <span class="sso-label">Continue with Apple</span>
+    </button>
+
+    <div class="auth-div">or</div>
+    <input type="email" class="form-input" id="authEmail" placeholder="your@email.com" inputmode="email" autocomplete="email"/>
+    <button class="sso-btn" id="magicBtn" style="justify-content:center;margin-bottom:0;">✉&nbsp; Send Magic Link</button>
+
+    <div class="auth-note">No account needed to browse events.<br>Sign in only to save favorites.</div>
+  </div>
+</div>
+
+<!-- iOS Install Hint (Safari doesn't support beforeinstallprompt) -->
+<div class="ios-install-hint" id="iosHint">
+  <button class="ios-hint-close" id="iosHintClose">×</button>
+  To install CITYBEAT on your iPhone:<br>
+  Tap <strong>Share</strong> <span style="font-size:14px">⬆</span> then <strong>"Add to Home Screen"</strong>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── EVENT DATA ───────────────────────────────────────────────────────────────
+const today = new Date();
+const fmt   = dt => dt.toISOString().split('T')[0];
+const d     = (off,h,m=0) => { const dt=new Date(today); dt.setDate(dt.getDate()+off); dt.setHours(h,m,0,0); return dt; };
+const isFree = p => p.toLowerCase().includes('free');
+
+const EVENTS = [
+  // NYC
+  {id:1,city:'nyc',name:'LCD Soundsystem',venue:'Brooklyn Steel',neighborhood:'Williamsburg',lat:40.7175,lng:-73.9434,time:d(0,20),cat:'Music',genre:'Electronic',price:'$55–$95',hot:true,desc:'One of the most beloved live acts in indie/dance music. Full production show with immersive lights and a two-hour set.'},
+  {id:2,city:'nyc',name:'MOMA Free Friday Evening',venue:'Museum of Modern Art',neighborhood:'Midtown',lat:40.7614,lng:-73.9776,time:d(0,17),cat:'Art',genre:'Exhibition',price:'Free',hot:false,desc:'Free admission every Friday 5:30–9pm. Current exhibitions include Picasso Landscapes and a major Basquiat retrospective.'},
+  {id:3,city:'nyc',name:'Comedy Cellar Late Show',venue:'Comedy Cellar',neighborhood:'West Village',lat:40.7305,lng:-74.0003,time:d(0,22,30),cat:'Comedy',genre:'Stand-Up',price:'$24 min',hot:false,desc:"NYC's most legendary basement comedy club. The late show lineup is announced night-of."},
+  {id:4,city:'nyc',name:'Smorgasburg Williamsburg',venue:'East River State Park',neighborhood:'Williamsburg',lat:40.7174,lng:-73.9608,time:d(1,11),cat:'Food',genre:'Street Food',price:'Free entry',hot:true,desc:'100+ local food vendors every Saturday. The largest weekly open-air food market in America.'},
+  {id:5,city:'nyc',name:'Bad Bunny — Most Wanted Tour',venue:'Madison Square Garden',neighborhood:'Midtown',lat:40.7505,lng:-73.9934,time:d(1,20),cat:'Music',genre:'Reggaeton',price:'$120–$350',hot:true,desc:"Benito's record-breaking tour lands at MSG. Expect full pyrotechnics, dancers, and a setlist spanning his entire catalog."},
+  {id:6,city:'nyc',name:'Brooklyn Flea — Fort Greene',venue:'Lafayette Ave Presbyterian',neighborhood:'Fort Greene',lat:40.6886,lng:-73.9771,time:d(2,10),cat:'Market',genre:'Vintage',price:'Free',hot:false,desc:"Curated vintage clothing, antiques, handmade goods, and excellent street food. One of Brooklyn's best Sunday rituals."},
+  {id:7,city:'nyc',name:'The National — Funny Dream Tour',venue:'Radio City Music Hall',neighborhood:'Midtown',lat:40.7600,lng:-73.9800,time:d(3,20),cat:'Music',genre:'Indie Rock',price:'$75–$135',hot:true,desc:"The National performing their acclaimed new album in full at one of NYC's most storied venues. Strings, horns, the whole deal."},
+  {id:8,city:'nyc',name:'Chelsea Gallery Walk',venue:'Chelsea Arts District',neighborhood:'Chelsea',lat:40.7484,lng:-74.0060,time:d(3,18),cat:'Art',genre:'Gallery',price:'Free',hot:false,desc:'Over 30 galleries host opening receptions on Thursday evenings. Free wine, free entry.'},
+  {id:9,city:'nyc',name:'NY Knicks vs Boston Celtics',venue:'Madison Square Garden',neighborhood:'Midtown',lat:40.7505,lng:-73.9934,time:d(4,19,30),cat:'Sports',genre:'Basketball',price:'$90–$420',hot:true,desc:'The best rivalry in the Eastern Conference. Playoff-seeding implications. The Garden will be electric.'},
+  {id:10,city:'nyc',name:'SummerStage: Afrobeats Night',venue:'Central Park SummerStage',neighborhood:'Upper East Side',lat:40.7736,lng:-73.9718,time:d(4,18),cat:'Music',genre:'Afrobeats',price:'Free',hot:true,desc:'Free outdoor concert featuring headlining Afrobeats and Amapiano acts. Bring a blanket.'},
+  {id:11,city:'nyc',name:'Grand Bazaar NYC',venue:'Upper West Side',neighborhood:'Upper West Side',lat:40.7793,lng:-73.9809,time:d(5,10),cat:'Market',genre:'Antiques',price:'Free entry',hot:false,desc:'140+ vendors every Sunday. Antiques, handmade art, vintage fashion, and specialty foods.'},
+  {id:12,city:'nyc',name:'NYTW World Premiere',venue:'New York Theater Workshop',neighborhood:'East Village',lat:40.7266,lng:-73.9886,time:d(5,19),cat:'Theater',genre:'Drama',price:'$35–$70',hot:false,desc:'World premiere of a new work. One of the most adventurous Off-Broadway companies in the city.'},
+  {id:13,city:'nyc',name:'Coney Island Boardwalk Bash',venue:'Coney Island',neighborhood:'Coney Island',lat:40.5755,lng:-73.9707,time:d(6,14),cat:'Festival',genre:'Street Fair',price:'Free',hot:false,desc:"Annual neighborhood celebration with live music stages, Nathan's, carnival rides, and beach access."},
+  {id:14,city:'nyc',name:'Jazz at Lincoln Center',venue:"Dizzy's Club",neighborhood:'Columbus Circle',lat:40.7687,lng:-73.9827,time:d(6,19,30),cat:'Music',genre:'Jazz',price:'$30–$45',hot:false,desc:'Intimate jazz club with panoramic Central Park views. Rotating residency of the finest players working today.'},
+  // AUSTIN
+  {id:15,city:'austin',name:'Khruangbin',venue:"Stubb's Amphitheatre",neighborhood:'Red River District',lat:30.2668,lng:-97.7354,time:d(0,20),cat:'Music',genre:'Psychedelic',price:'$65–$90',hot:true,desc:"Houston's finest trio bring their hypnotic Thai-influenced psychedelic soul to the best outdoor stage in Austin."},
+  {id:16,city:'austin',name:'Sixth Street Live Music Crawl',venue:'Sixth Street Entertainment District',neighborhood:'Sixth Street',lat:30.2673,lng:-97.7380,time:d(0,21),cat:'Music',genre:'Multi-Genre',price:'Free',hot:false,desc:"Austin's legendary strip of live music bars. Dozens of genres simultaneously, no cover at most venues."},
+  {id:17,city:'austin',name:'SFC Farmers Market',venue:'Republic Square',neighborhood:'Downtown',lat:30.2670,lng:-97.7493,time:d(1,9),cat:'Food',genre:'Farmers Market',price:'Free',hot:false,desc:'Producers-only market — everything sold is grown or made by the vendor. Local produce, baked goods, mushrooms.'},
+  {id:18,city:'austin',name:'Austin City Limits TV Taping',venue:'KLRU Studio 6A, UT Austin',neighborhood:'UT Campus',lat:30.2866,lng:-97.7398,time:d(1,19),cat:'Music',genre:'Various',price:'Lottery/Free',hot:true,desc:'The legendary TV show taping. Artists announced same day, tickets via online lottery.'},
+  {id:19,city:'austin',name:'Barton Springs Evening Swim',venue:'Barton Springs Pool',neighborhood:'Zilker',lat:30.2641,lng:-97.7706,time:d(1,19,30),cat:'Community',genre:'Recreation',price:'$4',hot:false,desc:'Spring-fed natural pool at 68°F year-round in Zilker Park. Evening hours are magical.'},
+  {id:20,city:'austin',name:"Death Cab for Cutie at Emo's",venue:"Emo's Austin",neighborhood:'South Lamar',lat:30.2429,lng:-97.7298,time:d(2,20),cat:'Music',genre:'Indie Rock',price:'$55–$80',hot:true,desc:"One of indie rock's most enduring bands on an intimate club tour. Floor standing, no bad spots."},
+  {id:21,city:'austin',name:'South Congress Sunday Stroll',venue:'South Congress Ave',neighborhood:'SoCo',lat:30.2506,lng:-97.7508,time:d(2,11),cat:'Community',genre:'Neighborhood',price:'Free',hot:false,desc:'Vintage shops, coffee at Jo\'s, and the "Hi, How Are You" Daniel Johnston mural.'},
+  {id:22,city:'austin',name:'Austin FC vs San Jose Earthquakes',venue:'Q2 Stadium',neighborhood:'North Austin',lat:30.3872,lng:-97.7195,time:d(3,19,30),cat:'Sports',genre:'Soccer',price:'$35–$110',hot:true,desc:'The Verde faithful pack Q2 for a Western Conference matchup. One of the loudest supporter cultures in MLS.'},
+  {id:23,city:'austin',name:'Texas Book Festival',venue:'Texas State Capitol Grounds',neighborhood:'Capitol District',lat:30.2747,lng:-97.7404,time:d(4,10),cat:'Community',genre:'Literary',price:'Free',hot:false,desc:'250+ authors across multiple stages. One of the best free literary festivals in the country.'},
+  {id:24,city:'austin',name:'Waterloo Greenway Night Market',venue:'Waterloo Park',neighborhood:'Downtown',lat:30.2796,lng:-97.7385,time:d(4,18),cat:'Market',genre:'Night Market',price:'Free',hot:true,desc:'Outdoor evening market in the new Waterloo Park. Local makers, food trucks, and live music stage.'},
+  {id:25,city:'austin',name:'Hole in the Wall Open Mic',venue:'Hole in the Wall',neighborhood:'Guadalupe',lat:30.2899,lng:-97.7427,time:d(5,20),cat:'Music',genre:'Singer-Songwriter',price:'Free',hot:false,desc:"Austin's oldest dive bar, open since 1974. Raw, unpredictable open mic — you might hear the next Gary Clark Jr."},
+  {id:26,city:'austin',name:'Violet Crown Film Festival',venue:'Violet Crown Cinema',neighborhood:'Second Street',lat:30.2657,lng:-97.7492,time:d(5,18),cat:'Art',genre:'Film',price:'$15',hot:false,desc:'Annual celebration of independent cinema. Q&As with filmmakers most nights.'},
+  {id:27,city:'austin',name:'Domain Outdoor Concert Series',venue:'The Domain',neighborhood:'North Austin',lat:30.4018,lng:-97.7273,time:d(6,17),cat:'Music',genre:'Various',price:'Free',hot:false,desc:"Free weekend concerts at Austin's north-side open-air hub. Good for families."},
+  {id:28,city:'austin',name:'SXSW Tech Keynote Day',venue:'Austin Convention Center',neighborhood:'Downtown',lat:30.2637,lng:-97.7396,time:d(2,9),cat:'Tech',genre:'Conference',price:'$399+ / badge',hot:true,desc:'Marquee day of SXSW tech programming. Major keynotes, packed networking, and side events throughout.'},
+  // BAY AREA
+  {id:29,city:'bay',name:'Outside Lands Music Festival',venue:'Golden Gate Park',neighborhood:'Inner Sunset',lat:37.7693,lng:-122.4889,time:d(0,12),cat:'Festival',genre:'Multi-Genre',price:'$150–$400',hot:true,desc:'Three days of music across multiple stages in Golden Gate Park. Exceptional food and wine programming.'},
+  {id:30,city:'bay',name:'Beach Blanket Babylon',venue:'Club Fugazi',neighborhood:'North Beach',lat:37.8002,lng:-122.4078,time:d(0,20),cat:'Theater',genre:'Musical Revue',price:'$35–$110',hot:false,desc:'An SF institution since 1974. The longest-running musical revue in theater history, famous for its elaborate hats.'},
+  {id:31,city:'bay',name:'Ferry Building Farmers Market',venue:'Ferry Building Marketplace',neighborhood:'Embarcadero',lat:37.7956,lng:-122.3935,time:d(1,8),cat:'Food',genre:'Farmers Market',price:'Free',hot:true,desc:"The best farmers market in California. Exceptional produce, Acme bread, artisan cheese, and the Bay as backdrop."},
+  {id:32,city:'bay',name:'The Fillmore: Radiohead',venue:'The Fillmore',neighborhood:'Fillmore',lat:37.7840,lng:-122.4330,time:d(1,20),cat:'Music',genre:'Alt Rock',price:'$85–$200',hot:true,desc:"A rare intimate club show from one of rock's most celebrated acts. 1,300-person cap. Poster included."},
+  {id:33,city:'bay',name:'Oakland Museum First Friday',venue:'Oakland Museum of California',neighborhood:'Downtown Oakland',lat:37.7984,lng:-122.2597,time:d(2,17),cat:'Art',genre:'Museum',price:'Free',hot:false,desc:'Free first Friday admission with live music in the courtyard, food trucks, and special programming.'},
+  {id:34,city:'bay',name:"Oakland A's at the Coliseum",venue:'Oakland Coliseum',neighborhood:'East Oakland',lat:37.7516,lng:-122.2007,time:d(2,13,5),cat:'Sports',genre:'Baseball',price:'$18–$75',hot:false,desc:"Catch the A's while you can. Something irreplaceable about this old stadium and its loyal faithful."},
+  {id:35,city:'bay',name:'SF Symphony — Beethoven Night',venue:'Davies Symphony Hall',neighborhood:'Civic Center',lat:37.7773,lng:-122.4196,time:d(3,20),cat:'Music',genre:'Classical',price:'$30–$125',hot:false,desc:"The SF Symphony performs Beethoven's 5th and 9th. Under Esa-Pekka Salonen, the orchestra is in exceptional form."},
+  {id:36,city:'bay',name:'Roxie Cinema Double Feature',venue:'Roxie Theater',neighborhood:'Mission District',lat:37.7649,lng:-122.4202,time:d(3,19),cat:'Art',genre:'Film',price:'$14',hot:false,desc:"SF's oldest continuously operating cinema. Independent, community-owned, showing things you won't find elsewhere."},
+  {id:37,city:'bay',name:'Sunday Streets — Mission',venue:'Mission District Streets',neighborhood:'Mission',lat:37.7591,lng:-122.4153,time:d(4,11),cat:'Community',genre:'Street Event',price:'Free',hot:true,desc:'Cars banned, streets opened to people. Biking, skating, live music, food, and the full Mission on display.'},
+  {id:38,city:'bay',name:'Yerba Buena Night',venue:'Yerba Buena Center for the Arts',neighborhood:'SoMa',lat:37.7849,lng:-122.4013,time:d(4,18),cat:'Art',genre:'Multi-Disciplinary',price:'Free',hot:false,desc:'Performances, art installations, film screenings, and DJs across outdoor and indoor spaces. Free.'},
+  {id:39,city:'bay',name:'Tartine Pop-Up Market',venue:'Tartine Manufactory',neighborhood:'Mission',lat:37.7627,lng:-122.4131,time:d(5,10),cat:'Food',genre:'Artisan Market',price:'Free',hot:false,desc:"Weekend pop-up alongside the flagship bakery. Artisan producers, ceramics, flowers, and the world's best country bread."},
+  {id:40,city:'bay',name:'AI Summit San Francisco',venue:'Moscone Center',neighborhood:'SoMa',lat:37.7844,lng:-122.4003,time:d(5,9),cat:'Tech',genre:'Conference',price:'$250–$800',hot:true,desc:'Premier AI industry conference. Founders, researchers, and investors from across the ecosystem. Major announcements expected.'},
+  {id:41,city:'bay',name:'Golden Gate Park Band Concert',venue:'Golden Gate Park Band Shell',neighborhood:'Panhandle',lat:37.7713,lng:-122.4559,time:d(5,14),cat:'Music',genre:'Classical/Band',price:'Free',hot:false,desc:'The SF Municipal Band has performed free Sunday concerts here since 1882. Bring a blanket. A perfect slow Sunday.'},
+  {id:42,city:'bay',name:'Grand Lake Farmers Market',venue:'Grand Lake, Oakland',neighborhood:'Grand Lake',lat:37.8147,lng:-122.2198,time:d(6,9),cat:'Food',genre:'Farmers Market',price:'Free',hot:false,desc:"Saturday morning institution in one of Oakland's most beloved neighborhoods. Community feel, quality vendors."},
+  {id:43,city:'bay',name:'The Warfield: Vampire Weekend',venue:'The Warfield',neighborhood:'Tenderloin',lat:37.7828,lng:-122.4090,time:d(6,20),cat:'Music',genre:'Indie Pop',price:'$60–$120',hot:true,desc:'Vampire Weekend on their homecoming tour plays two sold-out nights at the historic Warfield.'},
+  {id:44,city:'bay',name:'Stanford Startup Career Fair',venue:'Stanford Memorial Auditorium',neighborhood:'Palo Alto',lat:37.4268,lng:-122.1684,time:d(3,10),cat:'Tech',genre:'Career/Networking',price:'Free',hot:false,desc:'Hundreds of startups recruiting engineering and product talent. Open to the public.'},
+  {id:45,city:'bay',name:'Berkeley Thursday Farmers Market',venue:'Center St & MLK, Berkeley',neighborhood:'Downtown Berkeley',lat:37.8716,lng:-122.2727,time:d(0,14),cat:'Food',genre:'Farmers Market',price:'Free',hot:false,desc:"Downtown Berkeley's beloved Thursday afternoon market. Strong organic focus and a true community vibe."},
+  {id:46,city:'bay',name:'Hardly Strictly Bluegrass',venue:'Speedway Meadow, Golden Gate Park',neighborhood:'Inner Sunset',lat:37.7686,lng:-122.4952,time:d(5,13),cat:'Festival',genre:'Americana',price:'Free',hot:true,desc:'The greatest free music festival in the world. Funded in perpetuity by the late Warren Hellman — always free, no corporate sponsors.'},
+];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let state = { city:'all', date:fmt(today), cat:'all', view:'split', nav:'browse', selected:null, user:null, favorites:new Set() };
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const fmtTime = dt => { let h=dt.getHours(),m=dt.getMinutes(),ap=h>=12?'PM':'AM'; h=h%12||12; return m===0?`${h}${ap}`:`${h}:${String(m).padStart(2,'0')}${ap}`; };
+const fmtDateLabel = ds => {
+  const dt=new Date(ds+'T12:00:00'), ts=fmt(today), tms=fmt(new Date(today.getTime()+86400000));
+  const base=dt.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}).toUpperCase();
+  if(ds===ts) return 'TODAY — '+base;
+  if(ds===tms) return 'TOMORROW — '+base;
+  return base;
+};
+
+function getEventsForDate(ds) {
+  const sel=new Date(ds+'T00:00:00'), todayMid=new Date(fmt(today)+'T00:00:00');
+  const diff=Math.round((sel-todayMid)/86400000), norm=((diff%7)+7)%7;
+  return EVENTS.filter(e => {
+    const off=Math.round((e.time-new Date(fmt(today)+'T00:00:00'))/86400000), en=((off%7)+7)%7;
+    return en===norm && (state.city==='all'||e.city===state.city) && (state.cat==='all'||e.cat===state.cat);
+  }).sort((a,b)=>a.time.getHours()-b.time.getHours()||a.time.getMinutes()-b.time.getMinutes());
+}
+const getFavEvents=()=>EVENTS.filter(e=>state.favorites.has(e.id)).sort((a,b)=>a.time-b.time);
+
+// ─── STORAGE ─────────────────────────────────────────────────────────────────
+async function loadData(){
+  const pairs=[['cb-user',v=>{state.user=JSON.parse(v);updateUserUI();}],['cb-favs',v=>{state.favorites=new Set(JSON.parse(v));updateFavBadge();}]];
+  for(const[k,fn] of pairs){ try{const r=await window.storage?.get(k);if(r)fn(r.value);}catch(e){} }
+}
+const persist=async(k,v)=>{ try{await window.storage?.set(k,JSON.stringify(v));}catch(e){} };
+
+// ─── URL PARAMS (deep linking / PWA shortcuts) ────────────────────────────────
+function applyUrlParams() {
+  const p=new URLSearchParams(location.search);
+  if(p.get('city')) {
+    const c=p.get('city');
+    if(['all','nyc','austin','bay'].includes(c)) {
+      state.city=c;
+      document.querySelectorAll('.city-tab').forEach(b=>b.classList.toggle('active',b.dataset.city===c));
+    }
+  }
+  if(p.get('view')==='favorites') {
+    state.nav='favorites';
+    document.querySelectorAll('.nav-tab').forEach(b=>b.classList.toggle('active',b.dataset.nav==='favorites'));
+  }
+}
+
+// ─── ONLINE / OFFLINE ────────────────────────────────────────────────────────
+function updateOnlineStatus(){
+  $('offlinePill').classList.toggle('visible', !navigator.onLine);
+}
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+updateOnlineStatus();
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+let _tt;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2400); }
+
+// ─── MAP ─────────────────────────────────────────────────────────────────────
+let map, markers=[], markerMap={};
+function initMap(){
+  map=L.map('map',{zoomControl:false}).setView([39,-96],4);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © Carto',subdomains:'abcd',maxZoom:19}).addTo(map);
+  L.control.zoom({position:'topright'}).addTo(map);
+}
+function makeIcon(city,hot){
+  const c={nyc:'#4a9eff',austin:'#5ecb6e',bay:'#c97ff5'}[city]||'#aaa', ac=hot?'#f0a500':c;
+  return L.divIcon({html:`<div style="width:10px;height:10px;border-radius:50%;background:${ac};border:2px solid ${hot?'#f0a500':c};box-shadow:0 0 0 3px ${ac}33"></div>`,className:'',iconSize:[10,10],iconAnchor:[5,5]});
+}
+function updateMap(events){
+  markers.forEach(m=>map.removeLayer(m)); markers=[]; markerMap={};
+  if(!events.length)return;
+  events.forEach(e=>{
+    const m=L.marker([e.lat,e.lng],{icon:makeIcon(e.city,e.hot)}).addTo(map)
+      .bindPopup(`<div class="popup-name">${e.name}</div><div class="popup-venue">${e.venue}</div><div class="popup-time">${fmtTime(e.time)} · ${e.price}</div>`,{maxWidth:220});
+    m.on('click',()=>selectEvent(e)); markers.push(m); markerMap[e.id]=m;
+  });
+  const v={all:{lat:38.5,lng:-105,zoom:4},nyc:{lat:40.73,lng:-73.98,zoom:12},austin:{lat:30.267,lng:-97.743,zoom:13},bay:{lat:37.76,lng:-122.27,zoom:10}}[state.city]||{lat:38.5,lng:-105,zoom:4};
+  map.setView([v.lat,v.lng],v.zoom,{animate:true});
+}
+
+// ─── FAVORITES ────────────────────────────────────────────────────────────────
+function toggleFav(id){
+  if(!state.user){openModal('authModal');return;}
+  const was=state.favorites.has(id);
+  was?state.favorites.delete(id):state.favorites.add(id);
+  persist('cb-favs',[...state.favorites]); updateFavBadge();
+  toast(was?'Removed from saved events':'★ Event saved!');
+  document.querySelectorAll(`.fav-btn[data-id="${id}"]`).forEach(b=>{b.textContent=state.favorites.has(id)?'★':'☆';b.classList.toggle('faved',state.favorites.has(id));});
+  if(state.selected===id) updateDetailFavBtn(id);
+  if(state.nav==='favorites') renderList();
+}
+function updateFavBadge(){ const b=$('favBadge'); b.style.display=state.favorites.size?'inline':'none'; b.textContent=state.favorites.size; }
+function updateDetailFavBtn(id){ const b=$('detailFavBtn'),faved=state.favorites.has(id); b.textContent=faved?'★ SAVED':'☆ SAVE'; b.classList.toggle('faved',faved); }
+
+// ─── DETAIL PANEL ────────────────────────────────────────────────────────────
+function selectEvent(e){
+  state.selected=e?e.id:null;
+  document.querySelectorAll('.event-card').forEach(c=>c.classList.toggle('selected',c.dataset.id==e?.id));
+  const panel=$('detailPanel');
+  if(!e){panel.classList.remove('open');return;}
+  $('detailTitle').textContent=e.name;
+  $('detailDesc').textContent=e.desc;
+  const cityLabels={nyc:'New York City',austin:'Austin, TX',bay:'SF Bay Area'};
+  $('detailMeta').innerHTML=`
+    <div class="dmi">📍 <span>${e.venue}${e.neighborhood?', '+e.neighborhood:''}</span></div>
+    <div class="dmi">🕐 <span>${fmtTime(e.time)}</span></div>
+    <div class="dmi">🎟 <span>${e.price}</span></div>
+    <div class="dmi">🏙 <span>${cityLabels[e.city]||e.city}</span></div>
+  `;
+  updateDetailFavBtn(e.id); panel.classList.add('open');
+  if(markerMap[e.id]&&(state.view==='split'||state.view==='map')){map.setView([e.lat,e.lng],15,{animate:true});markerMap[e.id].openPopup();}
+}
+$('detailClose').onclick=()=>selectEvent(null);
+$('detailFavBtn').onclick=()=>{ if(state.selected!==null) toggleFav(state.selected); };
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+const cityTag=c=>({nyc:'<span class="tag tag-city-nyc">NYC</span>',austin:'<span class="tag tag-city-austin">ATX</span>',bay:'<span class="tag tag-city-bay">BAY</span>'}[c]||'');
+function renderCard(e){
+  const faved=state.favorites.has(e.id), showCity=state.city==='all'||state.nav==='favorites';
+  return `<div class="event-card" data-id="${e.id}">
+    <div class="event-time-col"><div class="event-time">${fmtTime(e.time)}</div><div class="event-price">${e.price.split('–')[0]}</div></div>
+    <div class="event-main">
+      <div class="event-name">${e.name}</div>
+      <div class="event-venue">${e.venue}${e.neighborhood?', '+e.neighborhood:''}</div>
+      <div class="event-tags">
+        <span class="tag tag-genre">${e.genre}</span>
+        ${showCity?cityTag(e.city):''}
+        ${e.hot?'<span class="tag tag-hot">🔥 HOT</span>':''}
+        ${isFree(e.price)?'<span class="tag tag-free">FREE</span>':''}
+      </div>
+    </div>
+    <button class="fav-btn${faved?' faved':''}" data-id="${e.id}" aria-label="${faved?'Remove from':'Add to'} saved events">${faved?'★':'☆'}</button>
+  </div>`;
+}
+function attachHandlers(){
+  document.querySelectorAll('.event-card').forEach(card=>{
+    card.addEventListener('click',ev=>{ if(ev.target.classList.contains('fav-btn'))return; selectEvent(EVENTS.find(e=>e.id==card.dataset.id)); });
+  });
+  document.querySelectorAll('.fav-btn').forEach(btn=>{
+    btn.addEventListener('click',ev=>{ ev.stopPropagation(); toggleFav(parseInt(btn.dataset.id)); });
+  });
+}
+
+function renderList(){
+  const list=$('eventList'), cf=$('catFilter'), dn=document.querySelector('.date-nav');
+  if(state.nav==='favorites'){
+    cf.style.visibility='hidden'; dn.style.opacity='.35'; dn.style.pointerEvents='none';
+    const favs=getFavEvents();
+    $('sidebarDateLabel').textContent='SAVED EVENTS'; $('sidebarCount').textContent=`${favs.length} SAVED`;
+    if(!favs.length){ list.innerHTML=`<div class="empty-state"><div class="icon">☆</div><div>No saved events yet</div><div style="font-size:11px;margin-top:5px;max-width:180px">Tap ☆ on any event while browsing</div></div>`; updateMap([]); return; }
+    const groups={};favs.forEach(e=>{const k=fmt(e.time);if(!groups[k])groups[k]=[];groups[k].push(e);});
+    list.innerHTML=Object.entries(groups).sort(([a],[b])=>a.localeCompare(b)).map(([day,evs])=>`<div class="section-day">${fmtDateLabel(day)}</div>${evs.map(renderCard).join('')}`).join('');
+    attachHandlers(); updateMap(favs); return;
+  }
+  cf.style.visibility='visible'; dn.style.opacity='1'; dn.style.pointerEvents='all';
+  const events=getEventsForDate(state.date);
+  $('sidebarDateLabel').textContent=fmtDateLabel(state.date);
+  $('sidebarCount').textContent=`${events.length} EVENT${events.length!==1?'S':''}`;
+  if(!events.length){ list.innerHTML=`<div class="empty-state"><div class="icon">📭</div><div>No events found</div><div style="font-size:11px;margin-top:5px">Try a different date, city, or category</div></div>`; updateMap([]); return; }
+  list.innerHTML=events.map(renderCard).join(''); attachHandlers(); updateMap(events);
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+const openModal=id=>$(id).classList.add('open');
+const closeModal=id=>$(id).classList.remove('open');
+document.querySelectorAll('.modal-backdrop').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+function login(provider){
+  const profiles={google:{name:'Alex Chen',email:'alex@gmail.com',avatar:'AC'},apple:{name:'Alex',email:'alex@icloud.com',avatar:'A'},magic:{name:null,email:$('authEmail').value,avatar:'✉'}};
+  const u=profiles[provider]; if(provider==='magic'&&!u.email){toast('Enter your email first.');return;}
+  state.user=u; persist('cb-user',u); updateUserUI(); closeModal('authModal');
+  toast(`Welcome${u.name?', '+u.name.split(' ')[0]:''}! 👋`); renderList();
+}
+function updateUserUI(){ const u=state.user; $('userAvatar').textContent=u?u.avatar:'☺'; $('userLabel').textContent=u?(u.name?u.name.split(' ')[0]:u.email.split('@')[0]):'Sign In'; }
+$('userBtn').onclick=()=>{ if(state.user){state.user=null;persist('cb-user',null);updateUserUI();toast('Signed out.');renderList();}else openModal('authModal'); };
+$('authClose').onclick=()=>closeModal('authModal');
+$('googleBtn').onclick=()=>login('google');
+$('appleBtn').onclick=()=>login('apple');
+$('magicBtn').onclick=()=>login('magic');
+
+// ─── CONTROLS ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.city-tab').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.city-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.city=btn.dataset.city;renderList();}));
+document.querySelectorAll('.cat-pill').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.cat-pill').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.cat=btn.dataset.cat;renderList();}));
+document.querySelectorAll('.nav-tab').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.nav=btn.dataset.nav;selectEvent(null);renderList();}));
+document.querySelectorAll('.view-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.view=btn.dataset.view;const body=$('appBody');body.className='app-body';if(state.view==='list')body.classList.add('list-full');if(state.view==='map')body.classList.add('map-full');setTimeout(()=>map&&map.invalidateSize(),50);}));
+const dp=$('datePicker'); dp.value=state.date;
+dp.addEventListener('change',()=>{state.date=dp.value;renderList();});
+$('prevDay').addEventListener('click',()=>{const dt=new Date(state.date+'T12:00:00');dt.setDate(dt.getDate()-1);state.date=fmt(dt);dp.value=state.date;renderList();});
+$('nextDay').addEventListener('click',()=>{const dt=new Date(state.date+'T12:00:00');dt.setDate(dt.getDate()+1);state.date=fmt(dt);dp.value=state.date;renderList();});
+
+// ─── PWA: SERVICE WORKER ─────────────────────────────────────────────────────
+if('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => {
+        console.log('[PWA] SW registered, scope:', reg.scope);
+        // Check for updates periodically
+        setInterval(()=>reg.update(), 60*60*1000);
+        reg.addEventListener('updatefound', () => {
+          const newSW = reg.installing;
+          newSW.addEventListener('statechange', () => {
+            if(newSW.state==='installed' && navigator.serviceWorker.controller) {
+              toast('App updated — refresh for latest version ↺');
+            }
+          });
+        });
+      })
+      .catch(err => console.warn('[PWA] SW registration failed:', err));
+  });
+}
+
+// ─── PWA: INSTALL PROMPT ─────────────────────────────────────────────────────
+let deferredInstallPrompt = null;
+const INSTALL_DISMISSED_KEY = 'cb-install-dismissed';
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Only show if user hasn't dismissed before
+  if(!localStorage.getItem(INSTALL_DISMISSED_KEY)) {
+    setTimeout(()=>$('installBanner').classList.add('visible'), 2500);
+  }
+});
+
+$('installNowBtn').addEventListener('click', async () => {
+  $('installBanner').classList.remove('visible');
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  if(outcome==='accepted') toast('CITYBEAT installed! 🎉 Find it on your home screen.');
+});
+
+$('installDismiss').addEventListener('click', () => {
+  $('installBanner').classList.remove('visible');
+  localStorage.setItem(INSTALL_DISMISSED_KEY, '1');
+});
+
+window.addEventListener('appinstalled', () => {
+  $('installBanner').classList.remove('visible');
+  toast('CITYBEAT installed! 🎉');
+});
+
+// ─── PWA: iOS INSTALL HINT ────────────────────────────────────────────────────
+// iOS Safari doesn't fire beforeinstallprompt — show manual instructions instead
+function isIOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+function isInStandaloneMode(){ return ('standalone' in navigator && navigator.standalone) || window.matchMedia('(display-mode: standalone)').matches; }
+
+if(isIOS() && !isInStandaloneMode() && !localStorage.getItem(INSTALL_DISMISSED_KEY)) {
+  setTimeout(()=>$('iosHint').classList.add('visible'), 3000);
+}
+$('iosHintClose').addEventListener('click', ()=>{ $('iosHint').classList.remove('visible'); localStorage.setItem(INSTALL_DISMISSED_KEY,'1'); });
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+initMap();
+applyUrlParams();
+loadData().then(()=>renderList());
+</script>
+</body>
+</html>

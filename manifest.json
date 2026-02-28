@@ -1,0 +1,70 @@
+{
+  "name": "CITYBEAT — Live Events",
+  "short_name": "CITYBEAT",
+  "description": "Concerts, festivals, and public events in NYC, Austin, and the SF Bay Area.",
+  "start_url": "/citybeat/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e0e0f",
+  "theme_color": "#0e0e0f",
+  "categories": ["entertainment", "lifestyle", "music"],
+  "icons": [
+    {
+      "src": "/citybeat/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/citybeat/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/citybeat/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/citybeat/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "CITYBEAT Event Browser"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "NYC Events",
+      "short_name": "NYC",
+      "description": "Browse New York City events today",
+      "url": "/citybeat/?city=nyc",
+      "icons": [{ "src": "/citybeat/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Bay Area Events",
+      "short_name": "BAY",
+      "description": "Browse SF Bay Area events today",
+      "url": "/citybeat/?city=bay",
+      "icons": [{ "src": "/citybeat/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Austin Events",
+      "short_name": "ATX",
+      "description": "Browse Austin events today",
+      "url": "/citybeat/?city=austin",
+      "icons": [{ "src": "/citybeat/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Saved Events",
+      "short_name": "SAVED",
+      "description": "View your saved events",
+      "url": "/citybeat/?view=favorites",
+      "icons": [{ "src": "/citybeat/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
