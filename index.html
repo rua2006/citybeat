@@ -231,6 +231,30 @@ header{
 .leaflet-control-attribution{background:rgba(10,10,11,.85)!important;color:var(--muted2)!important;font-size:9px!important;}
 .leaflet-control-attribution a{color:var(--muted2)!important;}
 
+/* ── LOADING BAR ── */
+.loading-bar{height:2px;background:var(--border);position:relative;overflow:hidden;flex-shrink:0;display:none;}
+.loading-bar.active{display:block;}
+.loading-bar-fill{position:absolute;left:-60%;width:60%;height:100%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:loadSlide 1.2s ease-in-out infinite;}
+@keyframes loadSlide{0%{left:-60%}100%{left:120%}}
+
+/* ── API KEY SETUP BANNER ── */
+.api-banner{display:none;align-items:center;gap:10px;padding:8px 14px;background:linear-gradient(90deg,#1a1200,#1c1c1f);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;}
+.api-banner.visible{display:flex;}
+.api-banner-text{font-size:11px;color:var(--muted);flex:1;min-width:180px;line-height:1.5;}
+.api-banner-text strong{color:var(--accent);}
+.api-banner-text a{color:var(--accent);}
+.api-key-row{display:flex;gap:6px;align-items:center;}
+.api-key-input{background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:4px 8px;border-radius:4px;font-family:'DM Mono',monospace;font-size:11px;outline:none;width:210px;}
+.api-key-input:focus{border-color:var(--accent);}
+.api-key-save{background:var(--accent);color:#111;border:none;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:'DM Mono',monospace;letter-spacing:.3px;}
+.api-key-save:hover{opacity:.85;}
+.api-banner-dismiss{background:none;border:none;color:var(--muted2);font-size:18px;cursor:pointer;padding:2px;line-height:1;margin-left:auto;}
+
+/* ── DATA SOURCE BADGE ── */
+.data-badge{font-family:'DM Mono',monospace;font-size:9px;font-weight:500;letter-spacing:.5px;padding:2px 6px;border-radius:3px;vertical-align:middle;flex-shrink:0;}
+.data-badge.live{background:rgba(94,203,110,.15);color:#5ecb6e;border:1px solid rgba(94,203,110,.25);}
+.data-badge.demo{background:rgba(122,120,112,.12);color:var(--muted);border:1px solid var(--border);}
+
 /* ── RESPONSIVE: Mobile ── */
 @media (max-width: 680px) {
   header{gap:7px;padding:0 10px;height:48px;overflow-x:auto;scrollbar-width:none;}
@@ -298,6 +322,22 @@ header{
   <button class="install-dismiss" id="installDismiss" title="Dismiss">×</button>
 </div>
 
+<!-- Live events loading bar -->
+<div class="loading-bar" id="loadingBar"><div class="loading-bar-fill"></div></div>
+
+<!-- API key setup banner (shown when no key is configured) -->
+<div class="api-banner" id="apiBanner">
+  <div class="api-banner-text">
+    <strong>ENABLE LIVE EVENTS</strong> — Paste your free Ticketmaster API key to see real events in SF, NYC &amp; Austin.
+    &nbsp;<a href="https://developer.ticketmaster.com/products-and-docs/apis/getting-started/" target="_blank" rel="noopener">Get free key →</a>
+  </div>
+  <div class="api-key-row">
+    <input class="api-key-input" id="apiKeyInput" type="password" placeholder="Paste API key here" autocomplete="off"/>
+    <button class="api-key-save" id="apiKeySave">SAVE</button>
+  </div>
+  <button class="api-banner-dismiss" id="apiBannerDismiss" title="Dismiss">×</button>
+</div>
+
 <!-- Offline indicator -->
 <div class="offline-pill" id="offlinePill">
   <div class="offline-dot"></div>
@@ -308,7 +348,10 @@ header{
   <div class="sidebar">
     <div class="sidebar-header">
       <div class="sidebar-date-label" id="sidebarDateLabel">TODAY</div>
-      <div class="sidebar-count" id="sidebarCount">— EVENTS</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="sidebar-count" id="sidebarCount">— EVENTS</div>
+        <span class="data-badge demo" id="dataBadge">DEMO</span>
+      </div>
     </div>
     <div class="cat-filter" id="catFilter">
       <button class="cat-pill active" data-cat="all">ALL</button>
@@ -338,6 +381,7 @@ header{
       </div>
       <div class="detail-meta" id="detailMeta"></div>
       <div class="detail-desc" id="detailDesc"></div>
+      <a class="detail-tickets-link" id="detailTicketsLink" href="#" target="_blank" rel="noopener" style="display:none;margin:10px 0 0;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;text-decoration:none;letter-spacing:.3px;">GET TICKETS →</a>
     </div>
   </div>
 </div>
@@ -440,6 +484,148 @@ const EVENTS = [
   {id:46,city:'bay',name:'Hardly Strictly Bluegrass',venue:'Speedway Meadow, Golden Gate Park',neighborhood:'Inner Sunset',lat:37.7686,lng:-122.4952,time:d(5,13),cat:'Festival',genre:'Americana',price:'Free',hot:true,desc:'The greatest free music festival in the world. Funded in perpetuity by the late Warren Hellman — always free, no corporate sponsors.'},
 ];
 
+// ─── LIVE EVENTS API (Ticketmaster Discovery) ─────────────────────────────────
+// Get your free API key at: https://developer.ticketmaster.com/products-and-docs/apis/getting-started/
+const TM_KEY = () => localStorage.getItem('cb-tm-key') || '';
+const TM_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+const CITY_PARAMS = {
+  nyc:    { latlong: '40.7128,-74.0060', radius: '30' },
+  austin: { latlong: '30.2672,-97.7431', radius: '25' },
+  bay:    { latlong: '37.7749,-122.4194', radius: '50' },
+};
+
+const SEG_TO_CAT = {
+  'Music':          'Music',
+  'Sports':         'Sports',
+  'Arts & Theatre': 'Theater',
+  'Film':           'Art',
+  'Miscellaneous':  'Community',
+};
+const GENRE_TO_CAT = {
+  'Comedy':        'Comedy',
+  'Stand-Up':      'Comedy',
+  'Food & Drink':  'Food',
+  'Technology':    'Tech',
+  'Film':          'Art',
+};
+
+function tmEventToApp(ev, cityKey) {
+  const venue   = ev._embedded?.venues?.[0];
+  const cls     = ev.classifications?.[0] || {};
+  const segment = cls.segment?.name  || 'Miscellaneous';
+  const genre   = cls.genre?.name    || '';
+  const sub     = cls.subGenre?.name || '';
+  const cat     = GENRE_TO_CAT[sub] || GENRE_TO_CAT[genre] || SEG_TO_CAT[segment] || 'Community';
+  const localDate = ev.dates?.start?.localDate;
+  const localTime = ev.dates?.start?.localTime;
+  const time  = localDate ? new Date(`${localDate}T${localTime || '20:00:00'}`) : new Date();
+  const pr    = ev.priceRanges?.[0];
+  const price = pr
+    ? (pr.min === pr.max ? `$${Math.round(pr.min)}` : `$${Math.round(pr.min)}–$${Math.round(pr.max)}`)
+    : 'See venue';
+  return {
+    id:           `tm-${ev.id}`,
+    city:         cityKey,
+    name:         ev.name,
+    venue:        venue?.name || 'TBA',
+    neighborhood: venue?.address?.line1 || '',
+    lat:          parseFloat(venue?.location?.latitude)  || 0,
+    lng:          parseFloat(venue?.location?.longitude) || 0,
+    time,
+    cat,
+    genre:  sub || genre || segment,
+    price,
+    hot:    false,
+    desc:   ev.info || ev.pleaseNote || `${ev.name} at ${venue?.name || 'the venue'}.`,
+    url:    ev.url || null,
+  };
+}
+
+async function fetchCityEvents(cityKey) {
+  const cacheKey = `cb-tm-v2-${cityKey}`;
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const { ts, data } = JSON.parse(cached);
+      if (Date.now() - ts < TM_CACHE_TTL)
+        return data.map(e => ({ ...e, time: new Date(e.time) }));
+    }
+  } catch(e) {}
+
+  const { latlong, radius } = CITY_PARAMS[cityKey];
+  const start = new Date(); start.setHours(0,0,0,0);
+  const end   = new Date(start); end.setDate(end.getDate() + 14);
+  const toTZ  = d => d.toISOString().slice(0,19) + 'Z';
+
+  const params = new URLSearchParams({
+    apikey:        TM_KEY(),
+    latlong,
+    radius,
+    unit:          'miles',
+    startDateTime: toTZ(start),
+    endDateTime:   toTZ(end),
+    size:          '200',
+    sort:          'date,asc',
+  });
+
+  const res = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params}`);
+  if (!res.ok) throw new Error(`Ticketmaster API ${res.status}`);
+  const json = await res.json();
+
+  const events = (json._embedded?.events || [])
+    .map(e => tmEventToApp(e, cityKey))
+    .filter(e => e.lat !== 0 && e.lng !== 0);
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: events }));
+  } catch(e) {}
+  return events;
+}
+
+let liveEvents = null;  // null = using demo data, array = using live data
+let isFetching = false;
+
+async function loadLiveEvents() {
+  if (!TM_KEY()) {
+    if (!localStorage.getItem('cb-api-banner-dismissed'))
+      $('apiBanner').classList.add('visible');
+    updateDataBadge(false);
+    renderList();
+    return;
+  }
+  if (isFetching) return;
+  isFetching = true;
+  $('loadingBar').classList.add('active');
+  try {
+    const results = await Promise.allSettled(['nyc','austin','bay'].map(fetchCityEvents));
+    const fetched = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+    results.filter(r => r.status === 'rejected').forEach(r => console.warn('[CITYBEAT]', r.reason));
+    if (fetched.length > 0) {
+      liveEvents = fetched;
+      updateDataBadge(true);
+      console.log(`[CITYBEAT] ${liveEvents.length} live events loaded`);
+    } else {
+      throw new Error('No events returned from API');
+    }
+  } catch(err) {
+    console.warn('[CITYBEAT] Falling back to demo data:', err.message);
+    liveEvents = null;
+    updateDataBadge(false);
+    if (/401|403/.test(err.message)) toast('Invalid API key — showing demo events');
+  } finally {
+    isFetching = false;
+    $('loadingBar').classList.remove('active');
+    renderList();
+  }
+}
+
+function updateDataBadge(isLive) {
+  const b = $('dataBadge');
+  b.textContent  = isLive ? 'LIVE' : 'DEMO';
+  b.className    = `data-badge ${isLive ? 'live' : 'demo'}`;
+}
+
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let state = { city:'all', date:fmt(today), cat:'all', view:'split', nav:'browse', selected:null, user:null, favorites:new Set() };
 
@@ -455,6 +641,15 @@ const fmtDateLabel = ds => {
 };
 
 function getEventsForDate(ds) {
+  if (liveEvents) {
+    // Real API data: filter by exact calendar date
+    return liveEvents.filter(e =>
+      fmt(e.time) === ds &&
+      (state.city==='all'||e.city===state.city) &&
+      (state.cat==='all'||e.cat===state.cat)
+    ).sort((a,b)=>a.time-b.time);
+  }
+  // Demo data: day-of-week rotation so events always appear
   const sel=new Date(ds+'T00:00:00'), todayMid=new Date(fmt(today)+'T00:00:00');
   const diff=Math.round((sel-todayMid)/86400000), norm=((diff%7)+7)%7;
   return EVENTS.filter(e => {
@@ -462,11 +657,18 @@ function getEventsForDate(ds) {
     return en===norm && (state.city==='all'||e.city===state.city) && (state.cat==='all'||e.cat===state.cat);
   }).sort((a,b)=>a.time.getHours()-b.time.getHours()||a.time.getMinutes()-b.time.getMinutes());
 }
-const getFavEvents=()=>EVENTS.filter(e=>state.favorites.has(e.id)).sort((a,b)=>a.time-b.time);
+function findEvent(id) {
+  const src = liveEvents ?? EVENTS;
+  return src.find(e => String(e.id) === String(id));
+}
+const getFavEvents=()=>{
+  const src=liveEvents??EVENTS;
+  return src.filter(e=>state.favorites.has(String(e.id))).sort((a,b)=>a.time-b.time);
+};
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
 async function loadData(){
-  const pairs=[['cb-user',v=>{state.user=JSON.parse(v);updateUserUI();}],['cb-favs',v=>{state.favorites=new Set(JSON.parse(v));updateFavBadge();}]];
+  const pairs=[['cb-user',v=>{state.user=JSON.parse(v);updateUserUI();}],['cb-favs',v=>{state.favorites=new Set(JSON.parse(v).map(String));updateFavBadge();}]];
   for(const[k,fn] of pairs){ try{const r=await window.storage?.get(k);if(r)fn(r.value);}catch(e){} }
 }
 const persist=async(k,v)=>{ try{await window.storage?.set(k,JSON.stringify(v));}catch(e){} };
@@ -516,7 +718,7 @@ function updateMap(events){
   events.forEach(e=>{
     const m=L.marker([e.lat,e.lng],{icon:makeIcon(e.city,e.hot)}).addTo(map)
       .bindPopup(`<div class="popup-name">${e.name}</div><div class="popup-venue">${e.venue}</div><div class="popup-time">${fmtTime(e.time)} · ${e.price}</div>`,{maxWidth:220});
-    m.on('click',()=>selectEvent(e)); markers.push(m); markerMap[e.id]=m;
+    m.on('click',()=>selectEvent(e)); markers.push(m); markerMap[String(e.id)]=m;
   });
   const v={all:{lat:38.5,lng:-105,zoom:4},nyc:{lat:40.73,lng:-73.98,zoom:12},austin:{lat:30.267,lng:-97.743,zoom:13},bay:{lat:37.76,lng:-122.27,zoom:10}}[state.city]||{lat:38.5,lng:-105,zoom:4};
   map.setView([v.lat,v.lng],v.zoom,{animate:true});
@@ -525,21 +727,22 @@ function updateMap(events){
 // ─── FAVORITES ────────────────────────────────────────────────────────────────
 function toggleFav(id){
   if(!state.user){openModal('authModal');return;}
-  const was=state.favorites.has(id);
-  was?state.favorites.delete(id):state.favorites.add(id);
+  const sid=String(id);
+  const was=state.favorites.has(sid);
+  was?state.favorites.delete(sid):state.favorites.add(sid);
   persist('cb-favs',[...state.favorites]); updateFavBadge();
   toast(was?'Removed from saved events':'★ Event saved!');
-  document.querySelectorAll(`.fav-btn[data-id="${id}"]`).forEach(b=>{b.textContent=state.favorites.has(id)?'★':'☆';b.classList.toggle('faved',state.favorites.has(id));});
-  if(state.selected===id) updateDetailFavBtn(id);
+  document.querySelectorAll(`.fav-btn[data-id="${sid}"]`).forEach(b=>{b.textContent=state.favorites.has(sid)?'★':'☆';b.classList.toggle('faved',state.favorites.has(sid));});
+  if(String(state.selected)===sid) updateDetailFavBtn(sid);
   if(state.nav==='favorites') renderList();
 }
 function updateFavBadge(){ const b=$('favBadge'); b.style.display=state.favorites.size?'inline':'none'; b.textContent=state.favorites.size; }
-function updateDetailFavBtn(id){ const b=$('detailFavBtn'),faved=state.favorites.has(id); b.textContent=faved?'★ SAVED':'☆ SAVE'; b.classList.toggle('faved',faved); }
+function updateDetailFavBtn(id){ const sid=String(id); const b=$('detailFavBtn'),faved=state.favorites.has(sid); b.textContent=faved?'★ SAVED':'☆ SAVE'; b.classList.toggle('faved',faved); }
 
 // ─── DETAIL PANEL ────────────────────────────────────────────────────────────
 function selectEvent(e){
-  state.selected=e?e.id:null;
-  document.querySelectorAll('.event-card').forEach(c=>c.classList.toggle('selected',c.dataset.id==e?.id));
+  state.selected=e?String(e.id):null;
+  document.querySelectorAll('.event-card').forEach(c=>c.classList.toggle('selected',c.dataset.id===state.selected));
   const panel=$('detailPanel');
   if(!e){panel.classList.remove('open');return;}
   $('detailTitle').textContent=e.name;
@@ -551,8 +754,11 @@ function selectEvent(e){
     <div class="dmi">🎟 <span>${e.price}</span></div>
     <div class="dmi">🏙 <span>${cityLabels[e.city]||e.city}</span></div>
   `;
-  updateDetailFavBtn(e.id); panel.classList.add('open');
-  if(markerMap[e.id]&&(state.view==='split'||state.view==='map')){map.setView([e.lat,e.lng],15,{animate:true});markerMap[e.id].openPopup();}
+  const tl=$('detailTicketsLink');
+  if(e.url){tl.href=e.url;tl.style.display='block';}else{tl.style.display='none';}
+  updateDetailFavBtn(String(e.id)); panel.classList.add('open');
+  const eid=String(e.id);
+  if(markerMap[eid]&&(state.view==='split'||state.view==='map')){map.setView([e.lat,e.lng],15,{animate:true});markerMap[eid].openPopup();}
 }
 $('detailClose').onclick=()=>selectEvent(null);
 $('detailFavBtn').onclick=()=>{ if(state.selected!==null) toggleFav(state.selected); };
@@ -560,7 +766,7 @@ $('detailFavBtn').onclick=()=>{ if(state.selected!==null) toggleFav(state.select
 // ─── RENDER ───────────────────────────────────────────────────────────────────
 const cityTag=c=>({nyc:'<span class="tag tag-city-nyc">NYC</span>',austin:'<span class="tag tag-city-austin">ATX</span>',bay:'<span class="tag tag-city-bay">BAY</span>'}[c]||'');
 function renderCard(e){
-  const faved=state.favorites.has(e.id), showCity=state.city==='all'||state.nav==='favorites';
+  const faved=state.favorites.has(String(e.id)), showCity=state.city==='all'||state.nav==='favorites';
   return `<div class="event-card" data-id="${e.id}">
     <div class="event-time-col"><div class="event-time">${fmtTime(e.time)}</div><div class="event-price">${e.price.split('–')[0]}</div></div>
     <div class="event-main">
@@ -578,10 +784,10 @@ function renderCard(e){
 }
 function attachHandlers(){
   document.querySelectorAll('.event-card').forEach(card=>{
-    card.addEventListener('click',ev=>{ if(ev.target.classList.contains('fav-btn'))return; selectEvent(EVENTS.find(e=>e.id==card.dataset.id)); });
+    card.addEventListener('click',ev=>{ if(ev.target.classList.contains('fav-btn'))return; selectEvent(findEvent(card.dataset.id)); });
   });
   document.querySelectorAll('.fav-btn').forEach(btn=>{
-    btn.addEventListener('click',ev=>{ ev.stopPropagation(); toggleFav(parseInt(btn.dataset.id)); });
+    btn.addEventListener('click',ev=>{ ev.stopPropagation(); toggleFav(btn.dataset.id); });
   });
 }
 
@@ -694,10 +900,27 @@ if(isIOS() && !isInStandaloneMode() && !localStorage.getItem(INSTALL_DISMISSED_K
 }
 $('iosHintClose').addEventListener('click', ()=>{ $('iosHint').classList.remove('visible'); localStorage.setItem(INSTALL_DISMISSED_KEY,'1'); });
 
+// ─── API KEY BANNER HANDLERS ─────────────────────────────────────────────────
+$('apiKeySave').onclick = () => {
+  const key = $('apiKeyInput').value.trim();
+  if (!key) { toast('Paste your Ticketmaster API key first.'); return; }
+  localStorage.setItem('cb-tm-key', key);
+  $('apiBanner').classList.remove('visible');
+  // Clear old caches so fresh data loads
+  ['nyc','austin','bay'].forEach(c => localStorage.removeItem(`cb-tm-v2-${c}`));
+  liveEvents = null;
+  toast('API key saved — loading live events...');
+  loadLiveEvents();
+};
+$('apiBannerDismiss').onclick = () => {
+  $('apiBanner').classList.remove('visible');
+  localStorage.setItem('cb-api-banner-dismissed', '1');
+};
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 initMap();
 applyUrlParams();
-loadData().then(()=>renderList());
+loadData().then(() => loadLiveEvents());
 </script>
 </body>
 </html>
